@@ -1,121 +1,169 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'services/gemini_service.dart'; // Ensure this file exists
 
-void main() {
-  runApp(const MyApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  await Supabase.initialize(
+    url: 'https://pemnwlmnxjgpqognkrwf.supabase.co',
+    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+  );
+
+  runApp(const HackUSFApp());
 }
 
-class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+final supabase = Supabase.instance.client;
 
-  // This widget is the root of your application.
+class HackUSFApp extends StatelessWidget {
+  const HackUSFApp({super.key});
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Flutter Demo',
+      title: 'USF Connect',
       theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: .fromSeed(seedColor: Colors.deepPurple),
+        brightness: Brightness.dark,
+        primaryColor: const Color(0xFF006747), // USF Green
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: const Color(0xFF006747),
+          brightness: Brightness.dark,
+        ),
+        useMaterial3: true,
       ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
+      home: const CampusFeedScreen(),
     );
   }
 }
 
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
+class CampusFeedScreen extends StatefulWidget {
+  const CampusFeedScreen({super.key});
 
   @override
-  State<MyHomePage> createState() => _MyHomePageState();
+  State<CampusFeedScreen> createState() => _CampusFeedScreenState();
 }
 
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
+class _CampusFeedScreenState extends State<CampusFeedScreen> {
+  final _usernameController = TextEditingController();
+  final _interestsController = TextEditingController();
+  String _selectedBuilding = 'ENB';
 
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
+  // Real-time Stream from Supabase
+  final Stream<List<Map<String, dynamic>>> _userStream = supabase
+      .from('profiles')
+      .stream(primaryKey: ['id'])
+      .eq('is_online', true)
+      .order('updated_at', ascending: false);
+
+  Future<void> _checkIn() async {
+    final user = supabase.auth.currentUser;
+    // For Hackathon speed: If not logged in, we use a fixed ID or Auth flow.
+    // Assuming you have a basic Auth setup or are using a Guest ID for testing.
+    await supabase.from('profiles').upsert({
+      'id': user?.id ?? 'guest-id-123',
+      'username': _usernameController.text,
+      'interests': _interestsController.text
+          .split(',')
+          .map((e) => e.trim())
+          .toList(),
+      'campus_location': _selectedBuilding,
+      'is_online': true,
+      'updated_at': DateTime.now().toIso8601String(),
     });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Checked in! You are now visible on campus.'),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
     return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: .center,
-          children: [
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
+      appBar: AppBar(title: const Text('USF Live Meetup')),
+      body: Column(
+        children: [
+          // 1. Profile / Check-in Section
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12.0),
+                child: Column(
+                  children: [
+                    TextField(
+                      controller: _usernameController,
+                      decoration: const InputDecoration(labelText: 'Username'),
+                    ),
+                    TextField(
+                      controller: _interestsController,
+                      decoration: const InputDecoration(
+                        labelText: 'Interests (comma separated)',
+                      ),
+                    ),
+                    DropdownButton<String>(
+                      value: _selectedBuilding,
+                      isExpanded: true,
+                      items: ['ENB', 'MSC', 'Library', 'Marshall Center']
+                          .map(
+                            (b) => DropdownMenuItem(value: b, child: Text(b)),
+                          )
+                          .toList(),
+                      onChanged: (val) =>
+                          setState(() => _selectedBuilding = val!),
+                    ),
+                    const SizedBox(height: 10),
+                    ElevatedButton(
+                      onPressed: _checkIn,
+                      child: const Text('Check In Live'),
+                    ),
+                  ],
+                ),
+              ),
             ),
-          ],
-        ),
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
+          ),
+          const Divider(),
+          const Text(
+            "Students Nearby",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          // 2. Real-time List Section
+          Expanded(
+            child: StreamBuilder<List<Map<String, dynamic>>>(
+              stream: _userStream,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData)
+                  return const Center(child: CircularProgressIndicator());
+                final users = snapshot.data!;
+                if (users.isEmpty)
+                  return const Center(
+                    child: Text("No one is online yet. Be the first!"),
+                  );
+
+                return ListView.builder(
+                  itemCount: users.length,
+                  itemBuilder: (context, index) {
+                    final person = users[index];
+                    return ListTile(
+                      leading: const CircleAvatar(child: Icon(Icons.person)),
+                      title: Text(person['username'] ?? 'Anonymous'),
+                      subtitle: Text(
+                        "${person['campus_location']} • Interests: ${person['interests']?.join(', ')}",
+                      ),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.bolt, color: Colors.amber),
+                        onPressed: () {
+                          // This is where you'd call GeminiService.getIcebreaker()
+                        },
+                      ),
+                    );
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }

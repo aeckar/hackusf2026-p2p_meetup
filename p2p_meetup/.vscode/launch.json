@@ -1,0 +1,23 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Phone",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "RFCY20JQN0X"
+    },
+    {
+      "name": "Emulator",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "emulator-5554"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Demo Mode (Both)",
+      "configurations": ["Phone", "Emulator"]
+    }
+  ]
+}
