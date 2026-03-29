@@ -103,4 +103,3 @@ One thing to note is that geolocations must be verified if they are on campus. I
 When the user presses the friend button, it shouldn't overlay on top of the current rows list. It should transition from the right, like how the login and signup screens are; however, the dashboard should remain where it is.
 
 use dicebear 9.x
-
