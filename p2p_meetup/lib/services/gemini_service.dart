@@ -5,7 +5,7 @@ class GeminiService {
 
   GeminiService(String apiKey)
     : _model = GenerativeModel(
-        model: 'gemini-flash-latest', // Fast & Cheap for Hackathons
+        model: 'gemini-flash-latest', // Fast & Cheap
         apiKey: apiKey,
       );
 
@@ -16,7 +16,8 @@ class GeminiService {
         'The University of South Florida, Tampa.  '
         'Keep it under 15 words and friendly.';
 
-    final response = await _model.generateContent([Content.text(prompt)]);
-    return response.text ?? "Hey! Looks like you both have cool interests.";
+  // workaround since GEMINI IS DEAD at this time of day >.<
+    final response = 'Hey, want to grab coffee at the Marshall Center and talk dev projects?';//await _model.generateContent([Content.text(prompt)]);
+    return response ?? "Hey! Looks like you both have cool interests.";
   }
 }

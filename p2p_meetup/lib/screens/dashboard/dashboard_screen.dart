@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
@@ -43,6 +43,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       GlobalKey<InAppNotificationHostState>();
 
   late final AnimationController _gearCtrl;
+  StreamSubscription<List<Map<String, dynamic>>>? _pingSub;
 
   bool _settingsOpen = false;
   bool _friendsMode = false;
@@ -61,13 +62,37 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     _gearCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapProfile());
+      _subscribeToPings();
     });
   }
 
   @override
   void dispose() {
+    _pingSub?.cancel();
     _gearCtrl.dispose();
     super.dispose();
+  }
+
+  void _subscribeToPings() {
+    final uid = context.read<AppSession>().localUserId;
+    if (uid.isEmpty) return;
+    final seen = <String>{};
+    _pingSub = widget.profileRepository.incomingPingsStream(uid).listen((pings) {
+      for (final ping in pings) {
+        final id = ping['id']?.toString() ?? '';
+        if (ping['seen'] == true || seen.contains(id)) continue;
+        seen.add(id);
+        final msg = ping['message']?.toString() ?? '';
+        final ice = ping['icebreaker']?.toString() ?? '';
+        _toast(InAppNotification(
+          message: msg.isNotEmpty
+              ? 'Ping: "$msg"\nIcebreaker: $ice'
+              : 'Icebreaker: $ice',
+          edge: NotificationVerticalEdge.bottom,
+        ));
+        widget.profileRepository.markPingSeen(id);
+      }
+    });
   }
 
   Future<void> _bootstrapProfile() async {
@@ -458,7 +483,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           context: context,
           builder: (ctx) => AlertDialog(
             title: const Text('Nearby landmark'),
-            content: Text('Use “${near.label}” as your location?'),
+            content: Text('Use "${near.label}" as your location?'),
             actions: [
               TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
               FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Yes')),
@@ -523,7 +548,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         title: Text('Ping ${profileUsername(row) ?? 'peer'}'),
         content: TextField(
           controller: msgCtrl,
-          style: UsfTheme.inputTextStyle,
+          style: const TextStyle(color: Colors.white),
           decoration: const InputDecoration(hintText: 'Quick question…'),
           maxLines: 3,
         ),
@@ -536,13 +561,24 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     if (send != true || !mounted) return;
 
     final my = context.read<AppSession>();
+    final toId = row['id']?.toString() ?? '';
     final ice = await widget.gemini.getIcebreaker(my.interests, profileInterests(row));
-    _toast(
-      InAppNotification(
-        message: 'Ping + icebreaker: $ice • “${msgCtrl.text.trim()}”',
-        edge: NotificationVerticalEdge.bottom,
-      ),
-    );
+
+    try {
+      await widget.profileRepository.sendPing(
+        fromId: my.localUserId,
+        toId: toId,
+        message: msgCtrl.text.trim(),
+        icebreaker: ice,
+      );
+      if (mounted) {
+        _toast(InAppNotification(message: 'Ping sent to ${profileUsername(row) ?? 'peer'}.'));
+      }
+    } catch (e) {
+      if (mounted) {
+        _toast(InAppNotification(message: 'Failed to send ping: $e'));
+      }
+    }
     msgCtrl.dispose();
   }
 
@@ -632,12 +668,12 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                   ),
                   const SizedBox(height: 12),
                   const Text('Interests', style: TextStyle(fontWeight: FontWeight.w700)),
-                  Text(profileInterests(row).join(', ').isEmpty ? '—' : profileInterests(row).join(', ')),
+                  Text(profileInterests(row).join(', ').isEmpty ? '\u2014' : profileInterests(row).join(', ')),
                   const SizedBox(height: 12),
                   const Text('Common meeting spots', style: TextStyle(fontWeight: FontWeight.w700)),
                   Text(
                     profileLocationHistory(row).keys.take(6).join(', ').isEmpty
-                        ? '—'
+                        ? '\u2014'
                         : profileLocationHistory(row).keys.take(6).join(', '),
                   ),
                   const SizedBox(height: 12),
@@ -672,7 +708,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     if (yes != true || !mounted) return;
     setState(() {
       _inMeeting = true;
-      _joinedTopic = decoded?.topic ?? '${profileUsername(row) ?? 'Host'}’s Meet';
+      _joinedTopic = decoded?.topic ?? '${profileUsername(row) ?? 'Host'}\u2019s Meet';
       _joinedMax = 8;
       _joinedCount = 3;
     });
@@ -780,7 +816,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     }).toList();
 
     if (friends.isEmpty) {
-      return const Center(child: Text('No friends yet — send requests from profiles.'));
+      return const Center(child: Text('No friends yet, send requests from profiles.'));
     }
 
     return ListView.separated(
@@ -979,7 +1015,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                               '$_joinedCount / $_joinedMax',
                               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
                             )
-                          : const Text('🦬', style: TextStyle(fontSize: 34)),
+                          : const Text('\u{1F9AC}', style: TextStyle(fontSize: 34)),
                     ),
                   ),
                 ],
@@ -1126,7 +1162,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
             ),
           SwitchListTile(
             title: const Text('Public campus location'),
-            subtitle: const Text('If off, others see “???” (the app may still use GPS privately).'),
+            subtitle: const Text('If off, others see "???" (the app may still use GPS privately).'),
             value: session.shareGeoPublic,
             onChanged: session.setShareGeoPublic,
           ),

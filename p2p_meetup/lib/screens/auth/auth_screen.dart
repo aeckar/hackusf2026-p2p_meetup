@@ -1,31 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../services/profile_repository.dart';
 import '../../state/app_session.dart';
 import '../../theme/usf_theme.dart';
-import '../../utils/profile_parse.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/loading_overlay.dart';
 
-String _authUserMessage(Object e) {
-  if (e is AuthWeakPasswordException) {
-    return 'Password is too weak.';
-  }
-  if (e is AuthException && e.code == 'weak_password') {
-    return 'Password is too weak.';
-  }
-  if (e is AuthException) {
-    return e.message;
-  }
-  return e.toString();
-}
-
 class AuthScreen extends StatefulWidget {
-  const AuthScreen({super.key, required this.supabase, required this.profileRepository});
+  const AuthScreen({super.key, required this.profileRepository});
 
-  final SupabaseClient supabase;
   final ProfileRepository profileRepository;
 
   @override
@@ -35,99 +19,75 @@ class AuthScreen extends StatefulWidget {
 class _AuthScreenState extends State<AuthScreen> {
   bool _showSignup = false;
 
-  final _loginEmail = TextEditingController();
+  final _loginUser = TextEditingController();
   final _loginPass = TextEditingController();
 
   final _suUser = TextEditingController();
   final _suEmail = TextEditingController();
-  final _suEmail2 = TextEditingController();
   final _suPass = TextEditingController();
   final _suPass2 = TextEditingController();
 
   @override
   void dispose() {
-    _loginEmail.dispose();
+    _loginUser.dispose();
     _loginPass.dispose();
     _suUser.dispose();
     _suEmail.dispose();
-    _suEmail2.dispose();
     _suPass.dispose();
     _suPass2.dispose();
     super.dispose();
   }
 
+  void _snack(String msg) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+  }
+
   Future<void> _submitLogin() async {
-    final email = _loginEmail.text.trim();
+    final username = _loginUser.text.trim();
     final pass = _loginPass.text;
-    if (email.isEmpty || pass.isEmpty) return;
+    if (username.isEmpty || pass.isEmpty) return;
 
     try {
-      await showLoadingOverlay<void>(context, _runLogin(email: email, password: pass));
+      await showLoadingOverlay<void>(context, _runLogin(username: username, password: pass));
     } catch (e) {
-      if (!mounted) return;
-      final weak = e is AuthWeakPasswordException ||
-          (e is AuthException && e.code == 'weak_password');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            weak ? 'Password is too weak.' : 'Login failed: ${_authUserMessage(e)}',
-          ),
-        ),
-      );
+      _snack('Login failed: $e');
     }
   }
 
-  Future<void> _runLogin({required String email, required String password}) async {
-    await widget.supabase.auth.signInWithPassword(email: email, password: password);
-    final uid = widget.supabase.auth.currentUser?.id;
-    final session = Provider.of<AppSession>(context, listen: false);
-    if (uid == null) return;
-    session.setLocalUserId(uid);
-    await widget.profileRepository.hydrateSession(
-      userId: uid,
-      onRow: (row) {
-        session.currentUsername = profileUsername(row) ?? '';
-        session.setInterests(profileInterests(row));
-        session.setSocials(profileSocials(row));
-        session.setShowRealName(profileRealNamePublic(row));
-      },
+  Future<void> _runLogin({required String username, required String password}) async {
+    final row = await widget.profileRepository.loginWithCredentials(
+      username: username,
+      password: password,
     );
+    if (row == null) throw Exception('Incorrect username or password.');
+    if (!mounted) return;
+    final session = Provider.of<AppSession>(context, listen: false);
+    session.setLocalUserId(row['id'] as String);
+    session.currentUsername = username;
+    session.setInterests(List<String>.from(row['interests'] as List? ?? []));
+    final socials = row['socials'];
+    session.setSocials(socials is Map ? socials.map((k, v) => MapEntry('$k', '$v')) : {});
+    session.setShowRealName(row['is_real_name_public'] == true);
   }
 
   Future<void> _submitSignup() async {
     final username = _suUser.text.trim();
     final email = _suEmail.text.trim();
-    final email2 = _suEmail2.text.trim();
     final p1 = _suPass.text;
     final p2 = _suPass2.text;
 
-    if (username.isEmpty || email.isEmpty || p1.isEmpty) return;
-    if (email != email2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Emails do not match.')),
-      );
-      return;
-    }
+    if (username.isEmpty || p1.isEmpty) return;
     if (p1 != p2) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Passwords do not match.')),
-      );
+      _snack('Passwords do not match.');
       return;
     }
 
     try {
-      await showLoadingOverlay<void>(context, _runSignup(username: username, email: email, password: p1));
+      await showLoadingOverlay<void>(
+          context, _runSignup(username: username, email: email, password: p1));
     } catch (e) {
-      if (!mounted) return;
-      final weak = e is AuthWeakPasswordException ||
-          (e is AuthException && e.code == 'weak_password');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            weak ? 'Password is too weak.' : 'Sign up failed: ${_authUserMessage(e)}',
-          ),
-        ),
-      );
+      _snack('Sign up failed: $e');
     }
   }
 
@@ -136,20 +96,12 @@ class _AuthScreenState extends State<AuthScreen> {
     required String email,
     required String password,
   }) async {
-    final res = await widget.supabase.auth.signUp(
-      email: email,
-      password: password,
-      data: {'username': username},
-    );
-    final uid = res.user?.id ?? widget.supabase.auth.currentUser?.id;
-    if (uid == null) {
-      throw StateError('Could not create user (check email confirmation settings).');
-    }
-    await widget.profileRepository.upsertAfterSignup(
-      userId: uid,
+    final uid = await widget.profileRepository.createAccount(
       username: username,
       email: email,
+      password: password,
     );
+    if (!mounted) return;
     final session = Provider.of<AppSession>(context, listen: false);
     session.setLocalUserId(uid);
     session.currentUsername = username;
@@ -170,7 +122,7 @@ class _AuthScreenState extends State<AuthScreen> {
               const Padding(
                 padding: EdgeInsets.only(bottom: 8),
                 child: Text(
-                  'Chat with your peers!',
+                  'Connect with Your peers!',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white,
@@ -212,10 +164,9 @@ class _AuthScreenState extends State<AuthScreen> {
       child: Column(
         children: [
           TextField(
-            controller: _loginEmail,
+            controller: _loginUser,
             style: UsfTheme.inputTextStyle,
-            decoration: UsfTheme.inputDeco('username / email'),
-            keyboardType: TextInputType.emailAddress,
+            decoration: UsfTheme.inputDeco('username'),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 12),
@@ -276,15 +227,7 @@ class _AuthScreenState extends State<AuthScreen> {
           TextField(
             controller: _suEmail,
             style: UsfTheme.inputTextStyle,
-            decoration: UsfTheme.inputDeco('email'),
-            keyboardType: TextInputType.emailAddress,
-            textInputAction: TextInputAction.next,
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: _suEmail2,
-            style: UsfTheme.inputTextStyle,
-            decoration: UsfTheme.inputDeco('confirm email'),
+            decoration: UsfTheme.inputDeco('email (optional)'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
           ),

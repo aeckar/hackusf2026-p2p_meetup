@@ -17,6 +17,70 @@ class BrandHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = titleOverride ?? 'USF Meet';
     final logoSize = compact ? 36.0 : 44.0;
+    final fontSize = compact ? 18.0 : 22.0;
+    final flareSize = compact ? 14.0 : 18.0;
+
+    // Split title around "Meet" to insert flare images inline.
+    // Falls back to plain text if the title doesn't contain "Meet".
+    final meetIndex = title.indexOf('Meet');
+    final titleWidget = meetIndex == -1
+        ? Text(
+            title,
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+              fontSize: fontSize,
+              letterSpacing: 0.5,
+            ),
+          )
+        : Row(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              if (meetIndex > 0)
+                Text(
+                  title.substring(0, meetIndex),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: fontSize,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              Image.asset(
+                'flare-open.png',
+                height: flareSize,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+              Text(
+                'Meet',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w800,
+                  fontSize: fontSize,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              Image.asset(
+                'flare-close.png',
+                height: flareSize,
+                fit: BoxFit.contain,
+                filterQuality: FilterQuality.high,
+              ),
+              if (meetIndex + 4 < title.length)
+                Text(
+                  title.substring(meetIndex + 4),
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: fontSize,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+            ],
+          );
+
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 6 : 12),
       child: Row(
@@ -28,17 +92,7 @@ class BrandHeader extends StatelessWidget {
             filterQuality: FilterQuality.high,
           ),
           const SizedBox(width: 10),
-          Flexible(
-            child: Text(
-              title,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: compact ? 18 : 22,
-                letterSpacing: 0.5,
-              ),
-            ),
-          ),
+          Flexible(child: titleWidget),
         ],
       ),
     );

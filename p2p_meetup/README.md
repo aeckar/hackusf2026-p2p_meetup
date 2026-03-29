@@ -1,4 +1,4 @@
-# p2p_meetup
+# USF Meet
 
 A new Flutter project.
 

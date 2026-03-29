@@ -21,7 +21,7 @@ Future<void> main() async {
 
   final supabase = Supabase.instance.client;
   final profiles = ProfileRepository(supabase);
-  final gemini = GeminiService('AIzaSyAhLbOKzIzncwEFVg2Y6V7C6Hwfd7IXmrI');
+  final gemini = GeminiService('AIzaSyD4Pc2yIUrS3a3gUWTOeOQTe250xok-8Cg');
 
   runApp(
     ChangeNotifierProvider(
@@ -31,77 +31,56 @@ Future<void> main() async {
         theme: ThemeData(
           brightness: Brightness.dark,
           primaryColor: UsfTheme.green,
-          colorScheme: ColorScheme.fromSeed(seedColor: UsfTheme.green, brightness: Brightness.dark),
+          colorScheme: ColorScheme.fromSeed(
+              seedColor: UsfTheme.green, brightness: Brightness.dark),
           useMaterial3: true,
         ),
         home: AuthNavigatorShell(
-          supabase: supabase,
           profileRepository: profiles,
           gemini: gemini,
+          supabase: supabase,
         ),
       ),
     ),
   );
 }
 
-class AuthNavigatorShell extends StatefulWidget {
+class AuthNavigatorShell extends StatelessWidget {
   const AuthNavigatorShell({
     super.key,
-    required this.supabase,
     required this.profileRepository,
     required this.gemini,
+    required this.supabase,
   });
 
-  final SupabaseClient supabase;
   final ProfileRepository profileRepository;
   final GeminiService gemini;
+  final SupabaseClient supabase;
 
-  @override
-  State<AuthNavigatorShell> createState() => _AuthNavigatorShellState();
-}
-
-class _AuthNavigatorShellState extends State<AuthNavigatorShell> {
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<AuthState>(
-      stream: widget.supabase.auth.onAuthStateChange,
-      builder: (context, snapshot) {
-        final user = widget.supabase.auth.currentUser;
+    final session = context.watch<AppSession>();
+    final loggedIn = session.localUserId.isNotEmpty;
 
-        if (user == null) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!context.mounted) return;
-            final s = context.read<AppSession>();
-            if (s.localUserId.isNotEmpty) {
-              s.clearForLogout();
-            }
-          });
-        }
-
-        return Navigator(
-          pages: [
-            if (user == null)
-              SlideFromRightPage(
-                key: const ValueKey<String>('auth'),
-                child: AuthScreen(
-                  supabase: widget.supabase,
-                  profileRepository: widget.profileRepository,
-                ),
-              )
-            else
-              SlideFromRightPage(
-                key: ValueKey<String>('dash-${user.id}'),
-                child: DashboardScreen(
-                  supabase: widget.supabase,
-                  profileRepository: widget.profileRepository,
-                  gemini: widget.gemini,
-                  onLogout: () => widget.supabase.auth.signOut(),
-                ),
-              ),
-          ],
-          onPopPage: (route, result) => route.didPop(result),
-        );
-      },
+    return Navigator(
+      pages: [
+        if (!loggedIn)
+          SlideFromRightPage(
+            key: const ValueKey<String>('auth'),
+            child: AuthScreen(profileRepository: profileRepository),
+          )
+        else
+          SlideFromRightPage(
+            key: ValueKey<String>('dash-${session.localUserId}'),
+            child: DashboardScreen(
+              supabase: supabase,
+              profileRepository: profileRepository,
+              gemini: gemini,
+              onLogout: () async => session.clearForLogout(),
+            ),
+          ),
+      ],
+      onDidRemovePage: (_) {},
     );
   }
 }
