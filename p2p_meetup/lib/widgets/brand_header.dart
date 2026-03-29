@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../theme/usf_theme.dart';
+/// USF Bulls mark (`bulls.png` in project root).
+const String kUsfBullsLogoAsset = 'bulls.png';
 
 class BrandHeader extends StatelessWidget {
   const BrandHeader({
@@ -15,17 +16,16 @@ class BrandHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = titleOverride ?? 'USF Meet';
+    final logoSize = compact ? 36.0 : 44.0;
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 6 : 12),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.sports_rugby, color: Colors.white, size: 28),
+          Image.asset(
+            kUsfBullsLogoAsset,
+            height: logoSize,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
           ),
           const SizedBox(width: 10),
           Flexible(
@@ -59,17 +59,15 @@ class BrandHeaderDashboard extends StatelessWidget {
       child: showDashboardTitle
           ? Padding(
               key: const ValueKey('dash'),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              padding: const EdgeInsets.only(left: 4, right: 8, top: 4, bottom: 4),
               child: Align(
                 alignment: Alignment.centerLeft,
-                child: Text(
-                  'dashboard',
-                  style: TextStyle(
-                    color: UsfTheme.goldAccent,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 20,
-                    letterSpacing: 0.8,
-                  ),
+                child: Image.asset(
+                  kUsfBullsLogoAsset,
+                  height: 40,
+                  fit: BoxFit.contain,
+                  alignment: Alignment.centerLeft,
+                  filterQuality: FilterQuality.high,
                 ),
               ),
             )
