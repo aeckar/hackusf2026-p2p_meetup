@@ -14,15 +14,16 @@ class ProfileRepository {
   Future<void> upsertAfterSignup({
     required String userId,
     required String username,
+    required String email,
   }) async {
     await _client.from('profiles').upsert({
       'id': userId,
       'username': username,
+      'email': email,
       'updated_at': DateTime.now().toIso8601String(),
       'campus_location': null,
-      'interest': <String>[],
-      'online': false,
-      'friends': <String>[],
+      'interests': <String>[],
+      'is_online': false,
       'location_history': <String, dynamic>{},
       'socials': <String, dynamic>{},
       'is_real_name_public': false,
@@ -37,7 +38,7 @@ class ProfileRepository {
     required bool showRealName,
   }) async {
     await _client.from('profiles').update({
-      'interest': interests,
+      'interests': interests,
       'socials': socials,
       'is_real_name_public': showRealName,
       // Optional: persist a settings flag if you add a column; for now only public geo is behavioral in UI.
@@ -51,7 +52,7 @@ class ProfileRepository {
     String? campusLocation,
   }) async {
     final patch = <String, dynamic>{
-      'online': online,
+      'is_online': online,
       'updated_at': DateTime.now().toIso8601String(),
     };
     if (campusLocation != null) patch['campus_location'] = campusLocation;

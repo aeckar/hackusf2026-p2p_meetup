@@ -6,9 +6,13 @@ abstract final class UsfTheme {
   static const Color goldAccent = Color(0xFFCFC493);
   static const Color surfaceInput = Color(0xFFE8E8E8);
 
+  /// Dark theme would otherwise paint light-gray input text on [surfaceInput].
+  static const TextStyle inputTextStyle = TextStyle(color: Colors.black);
+
   static InputDecoration inputDeco(String hint) {
     return InputDecoration(
       hintText: hint,
+      hintStyle: TextStyle(color: Colors.grey.shade700),
       filled: true,
       fillColor: surfaceInput,
       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),

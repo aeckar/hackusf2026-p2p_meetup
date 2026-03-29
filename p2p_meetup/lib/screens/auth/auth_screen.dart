@@ -9,6 +9,19 @@ import '../../utils/profile_parse.dart';
 import '../../widgets/brand_header.dart';
 import '../../widgets/loading_overlay.dart';
 
+String _authUserMessage(Object e) {
+  if (e is AuthWeakPasswordException) {
+    return 'Password is too weak.';
+  }
+  if (e is AuthException && e.code == 'weak_password') {
+    return 'Password is too weak.';
+  }
+  if (e is AuthException) {
+    return e.message;
+  }
+  return e.toString();
+}
+
 class AuthScreen extends StatefulWidget {
   const AuthScreen({super.key, required this.supabase, required this.profileRepository});
 
@@ -52,8 +65,14 @@ class _AuthScreenState extends State<AuthScreen> {
       await showLoadingOverlay<void>(context, _runLogin(email: email, password: pass));
     } catch (e) {
       if (!mounted) return;
+      final weak = e is AuthWeakPasswordException ||
+          (e is AuthException && e.code == 'weak_password');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Login failed: $e')),
+        SnackBar(
+          content: Text(
+            weak ? 'Password is too weak.' : 'Login failed: ${_authUserMessage(e)}',
+          ),
+        ),
       );
     }
   }
@@ -100,8 +119,14 @@ class _AuthScreenState extends State<AuthScreen> {
       await showLoadingOverlay<void>(context, _runSignup(username: username, email: email, password: p1));
     } catch (e) {
       if (!mounted) return;
+      final weak = e is AuthWeakPasswordException ||
+          (e is AuthException && e.code == 'weak_password');
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Sign up failed: $e')),
+        SnackBar(
+          content: Text(
+            weak ? 'Password is too weak.' : 'Sign up failed: ${_authUserMessage(e)}',
+          ),
+        ),
       );
     }
   }
@@ -120,7 +145,11 @@ class _AuthScreenState extends State<AuthScreen> {
     if (uid == null) {
       throw StateError('Could not create user (check email confirmation settings).');
     }
-    await widget.profileRepository.upsertAfterSignup(userId: uid, username: username);
+    await widget.profileRepository.upsertAfterSignup(
+      userId: uid,
+      username: username,
+      email: email,
+    );
     final session = Provider.of<AppSession>(context, listen: false);
     session.currentUsername = username;
     session.setInterests([]);
@@ -183,6 +212,7 @@ class _AuthScreenState extends State<AuthScreen> {
         children: [
           TextField(
             controller: _loginEmail,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('username / email'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
@@ -190,6 +220,7 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 12),
           TextField(
             controller: _loginPass,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('password'),
             obscureText: true,
             textInputAction: TextInputAction.done,
@@ -236,12 +267,14 @@ class _AuthScreenState extends State<AuthScreen> {
         children: [
           TextField(
             controller: _suUser,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('username'),
             textInputAction: TextInputAction.next,
           ),
           const SizedBox(height: 10),
           TextField(
             controller: _suEmail,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('email'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
@@ -249,6 +282,7 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _suEmail2,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('confirm email'),
             keyboardType: TextInputType.emailAddress,
             textInputAction: TextInputAction.next,
@@ -256,6 +290,7 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _suPass,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('password'),
             obscureText: true,
             textInputAction: TextInputAction.next,
@@ -263,6 +298,7 @@ class _AuthScreenState extends State<AuthScreen> {
           const SizedBox(height: 10),
           TextField(
             controller: _suPass2,
+            style: UsfTheme.inputTextStyle,
             decoration: UsfTheme.inputDeco('confirm password'),
             obscureText: true,
             textInputAction: TextInputAction.done,

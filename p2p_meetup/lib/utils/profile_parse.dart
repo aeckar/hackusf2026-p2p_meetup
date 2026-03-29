@@ -1,16 +1,16 @@
-/// Tolerates both `.cursorrules` names (`online`, `interest`) and older demo columns.
+/// Tolerates legacy column names (`online`, `interest`) and current `profiles` schema.
 bool profileIsOnline(Map<String, dynamic> row) {
-  if (row['online'] == true) return true;
   if (row['is_online'] == true) return true;
+  if (row['online'] == true) return true;
   return false;
 }
 
 List<String> profileInterests(Map<String, dynamic> row) {
-  if (row['interest'] != null) {
-    return List<String>.from(row['interest'] as List? ?? []);
-  }
   if (row['interests'] != null) {
     return List<String>.from(row['interests'] as List? ?? []);
+  }
+  if (row['interest'] != null) {
+    return List<String>.from(row['interest'] as List? ?? []);
   }
   return [];
 }
@@ -40,7 +40,14 @@ Map<String, String> profileSocials(Map<String, dynamic> row) {
 }
 
 List<String> profileFriends(Map<String, dynamic> row) {
-  return List<String>.from(row['friends'] as List? ?? []);
+  final raw = row['friends'];
+  if (raw is List) {
+    return List<String>.from(raw.map((e) => '$e'));
+  }
+  if (raw != null && '$raw'.isNotEmpty) {
+    return ['$raw'];
+  }
+  return [];
 }
 
 bool profileRealNamePublic(Map<String, dynamic> row) {

@@ -14,17 +14,18 @@ class SupabaseService {
 
   // 2. The "Check-In" Function
   Future<void> updateProfile({
-    required String username,
-    required List<String> interests,
-    required String location,
+    String? username,
+    List<String>? interests,
+    String? location,
   }) async {
-    final userId = _client.auth.currentUser?.id ?? 'guest-id-123';
+    final user = _client.auth.currentUser;
+    if (user == null) return;
 
     await _client.from('profiles').upsert({
-      'id': userId,
-      'username': username,
-      'interests': interests,
-      'campus_location': location,
+      'id': user.id,
+      'username': username ?? user.userMetadata?['username'] as String? ?? user.email ?? 'user',
+      'interests': interests ?? const ['rust', 'md', 'js'],
+      'campus_location': location ?? 'MSC',
       'is_online': true,
       'updated_at': DateTime.now().toIso8601String(),
     });

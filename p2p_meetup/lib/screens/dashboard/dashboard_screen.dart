@@ -103,7 +103,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Exit USF Meat?'),
+        title: const Text('Exit USF Meet?'),
         content: const Text('Do you want to exit the app?'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('No')),
@@ -166,11 +166,13 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                 children: [
                   TextField(
                     controller: topicCtrl,
+                    style: UsfTheme.inputTextStyle,
                     decoration: UsfTheme.inputDeco('Topic / subject'),
                   ),
                   const SizedBox(height: 10),
                   TextField(
                     controller: iceCtrl,
+                    style: UsfTheme.inputTextStyle,
                     decoration: UsfTheme.inputDeco('Optional icebreaker question'),
                   ),
                   const SizedBox(height: 12),
@@ -364,7 +366,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       builder: (ctx) => AlertDialog(
         title: const Text('Share location?'),
         content: const Text(
-          'Allow USF Meat to use your device location to match landmarks and compute distance?',
+          'Allow USF Meet to use your device location to match landmarks and compute distance?',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Not now')),
@@ -456,6 +458,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
         title: Text('Ping ${profileUsername(row) ?? 'peer'}'),
         content: TextField(
           controller: msgCtrl,
+          style: UsfTheme.inputTextStyle,
           decoration: const InputDecoration(hintText: 'Quick question…'),
           maxLines: 3,
         ),
@@ -1043,6 +1046,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           const SizedBox(height: 8),
           TextField(
             controller: _interestCtrl,
+            style: UsfTheme.inputTextStyle,
             decoration: const InputDecoration(labelText: 'Interests (comma separated)'),
           ),
           const SizedBox(height: 12),
@@ -1052,6 +1056,7 @@ class _SettingsPanelState extends State<_SettingsPanel> {
               padding: const EdgeInsets.only(top: 8),
               child: TextField(
                 controller: _socialCtrls[k]!,
+                style: UsfTheme.inputTextStyle,
                 decoration: InputDecoration(labelText: k),
               ),
             ),
