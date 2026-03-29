@@ -1,9 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/gemini_service.dart';
@@ -21,11 +23,13 @@ import '../../widgets/loading_overlay.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
+    required this.supabase,
     required this.profileRepository,
     required this.gemini,
     required this.onLogout,
   });
 
+  final SupabaseClient supabase;
   final ProfileRepository profileRepository;
   final GeminiService gemini;
   final Future<void> Function() onLogout;
@@ -69,10 +73,16 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   Future<void> _bootstrapProfile() async {
     if (!mounted) return;
     final session = context.read<AppSession>();
+    var uid = session.localUserId;
+    if (uid.isEmpty) {
+      uid = widget.supabase.auth.currentUser?.id ?? '';
+    }
+    if (uid.isEmpty) return;
+    session.setLocalUserId(uid);
     try {
-      await widget.profileRepository.ensureProfileRow(userId: session.localUserId);
+      await widget.profileRepository.ensureProfileRow(userId: uid);
       await widget.profileRepository.hydrateSession(
-        userId: session.localUserId,
+        userId: uid,
         onRow: (row) {
           session.currentUsername = profileUsername(row) ?? '';
           session.setInterests(profileInterests(row));
@@ -85,7 +95,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     }
     if (!mounted) return;
     try {
-      await widget.profileRepository.setOnlinePresence(userId: session.localUserId, online: true);
+      await widget.profileRepository.setOnlinePresence(userId: uid, online: true);
     } catch (_) {}
   }
 
@@ -108,10 +118,33 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   Future<void> _openMaps(String label, double? lat, double? lng) async {
-    final uri = (lat != null && lng != null)
-        ? Uri.parse('https://www.google.com/maps/search/?api=1&query=$lat,$lng')
-        : Uri.parse('https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(label)}');
-    if (await canLaunchUrl(uri)) await launchUrl(uri, mode: LaunchMode.externalApplication);
+    Future<bool> tryOpen(Uri uri) async {
+      try {
+        return await launchUrl(uri, mode: LaunchMode.externalApplication);
+      } catch (_) {
+        return false;
+      }
+    }
+
+    final webUri = Uri.parse(
+      (lat != null && lng != null)
+          ? 'https://www.google.com/maps/search/?api=1&query=$lat,$lng'
+          : 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(label)}',
+    );
+
+    if (lat != null && lng != null && !kIsWeb) {
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final geo = Uri.parse('geo:$lat,$lng?q=${Uri.encodeComponent(label)}');
+        if (await tryOpen(geo)) return;
+      }
+      if (defaultTargetPlatform == TargetPlatform.iOS) {
+        final apple =
+            Uri.parse('http://maps.apple.com/?ll=$lat,$lng&q=${Uri.encodeComponent(label)}');
+        if (await tryOpen(apple)) return;
+      }
+    }
+
+    await tryOpen(webUri);
   }
 
   Future<void> _exitAppDialog() async {
@@ -135,7 +168,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       builder: (ctx) => AlertDialog(
         title: const Text('Log out?'),
         content: const Text(
-          'You will switch to a new local profile on this device. Host/guest state and friend shortcuts reset.',
+          'You will return to the login screen. Host/guest state and friend shortcuts on this device reset.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),

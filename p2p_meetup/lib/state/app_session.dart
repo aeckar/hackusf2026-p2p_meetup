@@ -46,10 +46,32 @@ class GuestSeekState {
 
 /// In-memory session + preferences mirrored to Supabase where possible.
 class AppSession extends ChangeNotifier {
-  AppSession({required this.localUserId});
+  AppSession({String localUserId = ''}) : _localUserId = localUserId;
 
-  /// Matches `profiles.id` (persisted locally; no Supabase Auth).
-  final String localUserId;
+  /// Matches `profiles.id` (Supabase Auth uid when signed in).
+  String _localUserId;
+  String get localUserId => _localUserId;
+
+  void setLocalUserId(String id) {
+    if (_localUserId == id) return;
+    _localUserId = id;
+    notifyListeners();
+  }
+
+  void clearForLogout() {
+    _localUserId = '';
+    currentUsername = '';
+    interests = [];
+    socials.clear();
+    shareGeoPublic = true;
+    showRealName = true;
+    plusDismissed = false;
+    hostingMeet = null;
+    seekingHost = null;
+    friendEdges.clear();
+    incomingRequestFrom.clear();
+    notifyListeners();
+  }
 
   String currentUsername = '';
 

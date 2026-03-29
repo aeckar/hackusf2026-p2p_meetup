@@ -11,6 +11,25 @@ class ProfileRepository {
     return _client.from('profiles').stream(primaryKey: ['id']).order('updated_at', ascending: false);
   }
 
+  Future<void> upsertAfterSignup({
+    required String userId,
+    required String username,
+    required String email,
+  }) async {
+    await _client.from('profiles').upsert({
+      'id': userId,
+      'username': username,
+      'email': email,
+      'updated_at': DateTime.now().toIso8601String(),
+      'campus_location': null,
+      'interests': <String>[],
+      'is_online': false,
+      'location_history': <String, dynamic>{},
+      'socials': <String, dynamic>{},
+      'is_real_name_public': false,
+    });
+  }
+
   /// Ensures a row exists for this device’s profile id (direct upsert, no auth).
   Future<void> ensureProfileRow({
     required String userId,
