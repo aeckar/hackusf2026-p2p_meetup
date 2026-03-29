@@ -1,0 +1,1 @@
+enum SocialType { LinkedIn, Twitter, Facebook, Reddit, Discord, Cell }

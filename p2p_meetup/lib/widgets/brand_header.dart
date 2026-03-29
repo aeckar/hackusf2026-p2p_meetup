@@ -14,7 +14,7 @@ class BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = titleOverride ?? 'USF Meat';
+    final title = titleOverride ?? 'USF Meet';
     return Padding(
       padding: EdgeInsets.symmetric(horizontal: compact ? 8 : 16, vertical: compact ? 6 : 12),
       child: Row(

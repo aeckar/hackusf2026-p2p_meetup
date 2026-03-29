@@ -50,7 +50,7 @@
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>USF Meat uses your location on campus to show distance to meetups and match nearby landmarks.</string>
+	<string>USF Meet uses your location on campus to show distance to meetups and match nearby landmarks.</string>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>

@@ -49,7 +49,7 @@ class HackUSFApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'USF Meat',
+      title: 'USF Meet',
       theme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: UsfTheme.green,
