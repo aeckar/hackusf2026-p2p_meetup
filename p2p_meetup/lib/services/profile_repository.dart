@@ -11,15 +11,15 @@ class ProfileRepository {
     return _client.from('profiles').stream(primaryKey: ['id']).order('updated_at', ascending: false);
   }
 
-  Future<void> upsertAfterSignup({
+  /// Ensures a row exists for this device’s profile id (direct upsert, no auth).
+  Future<void> ensureProfileRow({
     required String userId,
-    required String username,
-    required String email,
+    String username = 'Peer',
   }) async {
     await _client.from('profiles').upsert({
       'id': userId,
       'username': username,
-      'email': email,
+      'email': null,
       'updated_at': DateTime.now().toIso8601String(),
       'campus_location': null,
       'interests': <String>[],
@@ -59,7 +59,7 @@ class ProfileRepository {
     await _client.from('profiles').update(patch).eq('id', userId);
   }
 
-  /// Best-effort read for merging into [AppSession] after login.
+  /// Best-effort read for merging into [AppSession].
   Future<void> hydrateSession({
     required String userId,
     required void Function(Map<String, dynamic> row) onRow,

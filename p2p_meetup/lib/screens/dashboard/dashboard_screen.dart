@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:provider/provider.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../services/gemini_service.dart';
@@ -22,20 +21,23 @@ import '../../widgets/loading_overlay.dart';
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({
     super.key,
-    required this.supabase,
     required this.profileRepository,
     required this.gemini,
+    required this.onLogout,
   });
 
-  final SupabaseClient supabase;
   final ProfileRepository profileRepository;
   final GeminiService gemini;
+  final Future<void> Function() onLogout;
 
   @override
   State<DashboardScreen> createState() => _DashboardScreenState();
 }
 
 class _DashboardScreenState extends State<DashboardScreen> with TickerProviderStateMixin {
+  final GlobalKey<InAppNotificationHostState> _notificationHostKey =
+      GlobalKey<InAppNotificationHostState>();
+
   late final AnimationController _gearCtrl;
 
   bool _settingsOpen = false;
@@ -54,7 +56,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     super.initState();
     _gearCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      unawaited(_syncOnlinePresence());
+      unawaited(_bootstrapProfile());
     });
   }
 
@@ -64,14 +66,27 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     super.dispose();
   }
 
-  Future<void> _syncOnlinePresence() async {
-    final uid = widget.supabase.auth.currentUser?.id;
-    if (uid == null) return;
+  Future<void> _bootstrapProfile() async {
+    if (!mounted) return;
+    final session = context.read<AppSession>();
     try {
-      await widget.profileRepository.setOnlinePresence(userId: uid, online: true);
+      await widget.profileRepository.ensureProfileRow(userId: session.localUserId);
+      await widget.profileRepository.hydrateSession(
+        userId: session.localUserId,
+        onRow: (row) {
+          session.currentUsername = profileUsername(row) ?? '';
+          session.setInterests(profileInterests(row));
+          session.setSocials(profileSocials(row));
+          session.setShowRealName(profileRealNamePublic(row));
+        },
+      );
     } catch (_) {
-      // Profiles row might not exist yet; ignore for demo.
+      // Row may be blocked by RLS; UI still works locally.
     }
+    if (!mounted) return;
+    try {
+      await widget.profileRepository.setOnlinePresence(userId: session.localUserId, online: true);
+    } catch (_) {}
   }
 
   Future<void> _ensureLocationForApp() async {
@@ -88,8 +103,8 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   void _toast(InAppNotification n) {
-    final host = InAppNotificationHost.of(context);
-    host.show(n);
+    // State.context sits above [InAppNotificationHost], so [of] cannot find it; use a key.
+    _notificationHostKey.currentState?.show(n);
   }
 
   Future<void> _openMaps(String label, double? lat, double? lng) async {
@@ -112,6 +127,25 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       ),
     );
     if (yes == true) SystemNavigator.pop();
+  }
+
+  Future<void> _logoutDialog() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Log out?'),
+        content: const Text(
+          'You will switch to a new local profile on this device. Host/guest state and friend shortcuts reset.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Log out')),
+        ],
+      ),
+    );
+    if (ok == true && mounted) {
+      await widget.onLogout();
+    }
   }
 
   Future<void> _plusFlow() async {
@@ -344,16 +378,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     );
     setState(() {});
 
-    final uid = widget.supabase.auth.currentUser?.id;
-    if (uid != null) {
-      try {
-        await widget.profileRepository.setOnlinePresence(
-          userId: uid,
-          online: true,
-          campusLocation: encodeMeetCampusLocation(topic: meet.topic, locationLabel: meet.locationLabel),
-        );
-      } catch (_) {}
-    }
+    final uid = context.read<AppSession>().localUserId;
+    try {
+      await widget.profileRepository.setOnlinePresence(
+        userId: uid,
+        online: true,
+        campusLocation: encodeMeetCampusLocation(topic: meet.topic, locationLabel: meet.locationLabel),
+      );
+    } catch (_) {}
 
     if (meet.icebreakerQuestion != null) {
       _toast(InAppNotification(message: 'Icebreaker set: ${meet.icebreakerQuestion}'));
@@ -485,7 +517,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     final uid = row['id']?.toString() ?? '';
     final name = profileUsername(row) ?? 'User';
     final session = context.read<AppSession>();
-    final myId = widget.supabase.auth.currentUser?.id;
+    final myId = session.localUserId;
 
     await showDialog<void>(
       context: context,
@@ -496,10 +528,10 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
           height: 460,
           child: StatefulBuilder(
             builder: (ctx, setLocal) {
-              FriendEdge edge = myId != null && uid == myId ? FriendEdge.friends : session.edgeFor(uid);
+              FriendEdge edge = uid == myId ? FriendEdge.friends : session.edgeFor(uid);
 
               Widget friendAction() {
-                if (myId == null || uid == myId) return const SizedBox.shrink();
+                if (uid == myId) return const SizedBox.shrink();
                 switch (edge) {
                   case FriendEdge.friends:
                     return IconButton(
@@ -632,17 +664,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
   }
 
   String _statusForRow(Map<String, dynamic> row, AppSession session) {
-    final myId = widget.supabase.auth.currentUser?.id;
+    final myId = session.localUserId;
     final id = row['id']?.toString();
     final meet = decodeMeetCampus(row['campus_location'] as String?);
     if (meet != null) return meet.topic;
-    if (myId != null && id == myId && session.hostingMeet != null) return session.hostingMeet!.topic;
+    if (id == myId && session.hostingMeet != null) return session.hostingMeet!.topic;
     return 'Looking for connections';
   }
 
   Widget _feedList(List<Map<String, dynamic>> users) {
     final session = context.watch<AppSession>();
-    final myId = widget.supabase.auth.currentUser?.id;
+    final myId = session.localUserId;
     final filtered = users.where((r) => profileIsOnline(r) && (r['id']?.toString() != myId)).toList();
 
     if (filtered.isEmpty) {
@@ -707,8 +739,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
 
   Widget _friendsList(List<Map<String, dynamic>> users) {
     final session = context.watch<AppSession>();
-    final myId = widget.supabase.auth.currentUser?.id;
-    if (myId == null) return const Center(child: Text('Not signed in'));
 
     final friends = users.where((r) {
       final id = r['id']?.toString();
@@ -766,6 +796,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       backgroundColor: const Color(0xFF0B0F0E),
       body: SafeArea(
         child: InAppNotificationHost(
+          key: _notificationHostKey,
           child: Stack(
             children: [
               Column(
@@ -780,6 +811,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                           tooltip: 'Exit',
                           onPressed: _exitAppDialog,
                           icon: const Icon(Icons.sensor_door_outlined, color: Colors.white),
+                        ),
+                        IconButton(
+                          tooltip: 'Log out',
+                          onPressed: _logoutDialog,
+                          icon: const Icon(Icons.logout, color: Colors.white),
                         ),
                         IconButton(
                           tooltip: 'Friends',
@@ -938,7 +974,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                             setState(() => _settingsOpen = false);
                           },
                           profileRepository: widget.profileRepository,
-                          supabase: widget.supabase,
                         ),
                       ),
                     ],
@@ -957,12 +992,10 @@ class _SettingsPanel extends StatefulWidget {
   const _SettingsPanel({
     required this.onClose,
     required this.profileRepository,
-    required this.supabase,
   });
 
   final VoidCallback onClose;
   final ProfileRepository profileRepository;
-  final SupabaseClient supabase;
 
   @override
   State<_SettingsPanel> createState() => _SettingsPanelState();
@@ -1014,18 +1047,16 @@ class _SettingsPanelState extends State<_SettingsPanel> {
     session.setShareGeoPublic(session.shareGeoPublic);
     session.setShowRealName(session.showRealName);
 
-    final uid = widget.supabase.auth.currentUser?.id;
-    if (uid != null) {
-      try {
-        await widget.profileRepository.syncSettings(
-          userId: uid,
-          interests: interests,
-          socials: socials,
-          shareGeoPublic: session.shareGeoPublic,
-          showRealName: session.showRealName,
-        );
-      } catch (_) {}
-    }
+    final uid = session.localUserId;
+    try {
+      await widget.profileRepository.syncSettings(
+        userId: uid,
+        interests: interests,
+        socials: socials,
+        shareGeoPublic: session.shareGeoPublic,
+        showRealName: session.showRealName,
+      );
+    } catch (_) {}
     widget.onClose();
   }
 

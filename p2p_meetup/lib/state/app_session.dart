@@ -46,6 +46,11 @@ class GuestSeekState {
 
 /// In-memory session + preferences mirrored to Supabase where possible.
 class AppSession extends ChangeNotifier {
+  AppSession({required this.localUserId});
+
+  /// Matches `profiles.id` (persisted locally; no Supabase Auth).
+  final String localUserId;
+
   String currentUsername = '';
 
   List<String> interests = [];

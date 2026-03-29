@@ -14,16 +14,14 @@ class SupabaseService {
 
   // 2. The "Check-In" Function
   Future<void> updateProfile({
+    required String userId,
     String? username,
     List<String>? interests,
     String? location,
   }) async {
-    final user = _client.auth.currentUser;
-    if (user == null) return;
-
     await _client.from('profiles').upsert({
-      'id': user.id,
-      'username': username ?? user.userMetadata?['username'] as String? ?? user.email ?? 'user',
+      'id': userId,
+      'username': username ?? 'user',
       'interests': interests ?? const ['rust', 'md', 'js'],
       'campus_location': location ?? 'MSC',
       'is_online': true,
@@ -32,8 +30,7 @@ class SupabaseService {
   }
 
   // 3. The "Check-Out" (Optional for Demo)
-  Future<void> goOffline() async {
-    final userId = _client.auth.currentUser?.id ?? 'guest-id-123';
+  Future<void> goOffline({required String userId}) async {
     await _client
         .from('profiles')
         .update({'is_online': false})
