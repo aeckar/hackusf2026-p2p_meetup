@@ -5,7 +5,7 @@ class GeminiService {
 
   GeminiService(String apiKey)
     : _model = GenerativeModel(
-        model: 'gemini-1.5-flash', // Fast & Cheap for Hackathons
+        model: 'gemini-flash-latest', // Fast & Cheap for Hackathons
         apiKey: apiKey,
       );
 

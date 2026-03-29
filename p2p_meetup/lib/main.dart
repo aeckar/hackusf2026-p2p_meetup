@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:p2p_meetup/services/gemini_service.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'services/gemini_service.dart'; // Ensure this file exists
+import 'package:uuid/uuid.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   await Supabase.initialize(
     url: 'https://pemnwlmnxjgpqognkrwf.supabase.co',
-    anonKey: 'YOUR_SUPABASE_ANON_KEY',
+    anonKey:
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBlbW53bG1ueGpncHFvZ25rcndmIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ3MTY4NDcsImV4cCI6MjA5MDI5Mjg0N30.8bldTDZsfNZVe8S8mKHwKfoSKqEskV2VtbgRQ09MPb0',
   );
 
   runApp(const HackUSFApp());
@@ -46,6 +48,9 @@ class CampusFeedScreen extends StatefulWidget {
 class _CampusFeedScreenState extends State<CampusFeedScreen> {
   final _usernameController = TextEditingController();
   final _interestsController = TextEditingController();
+  final _geminiService = GeminiService(
+    'AIzaSyAhLbOKzIzncwEFVg2Y6V7C6Hwfd7IXmrI', // Your Gemini API Key
+  );
   String _selectedBuilding = 'ENB';
 
   // Real-time Stream from Supabase
@@ -59,8 +64,9 @@ class _CampusFeedScreenState extends State<CampusFeedScreen> {
     final user = supabase.auth.currentUser;
     // For Hackathon speed: If not logged in, we use a fixed ID or Auth flow.
     // Assuming you have a basic Auth setup or are using a Guest ID for testing.
+    final String temporaryId = const Uuid().v4();
     await supabase.from('profiles').upsert({
-      'id': user?.id ?? 'guest-id-123',
+      'id': user?.id ?? temporaryId,
       'username': _usernameController.text,
       'interests': _interestsController.text
           .split(',')
@@ -105,7 +111,7 @@ class _CampusFeedScreenState extends State<CampusFeedScreen> {
                     DropdownButton<String>(
                       value: _selectedBuilding,
                       isExpanded: true,
-                      items: ['ENB', 'MSC', 'Library', 'Marshall Center']
+                        items: ['ENB', 'MSC', 'Library', 'Marshall Center']
                           .map(
                             (b) => DropdownMenuItem(value: b, child: Text(b)),
                           )
@@ -133,13 +139,15 @@ class _CampusFeedScreenState extends State<CampusFeedScreen> {
             child: StreamBuilder<List<Map<String, dynamic>>>(
               stream: _userStream,
               builder: (context, snapshot) {
-                if (!snapshot.hasData)
+                if (!snapshot.hasData) {
                   return const Center(child: CircularProgressIndicator());
+                }
                 final users = snapshot.data!;
-                if (users.isEmpty)
+                if (users.isEmpty) {
                   return const Center(
                     child: Text("No one is online yet. Be the first!"),
                   );
+                }
 
                 return ListView.builder(
                   itemCount: users.length,
@@ -153,8 +161,38 @@ class _CampusFeedScreenState extends State<CampusFeedScreen> {
                       ),
                       trailing: IconButton(
                         icon: const Icon(Icons.bolt, color: Colors.amber),
-                        onPressed: () {
-                          // This is where you'd call GeminiService.getIcebreaker()
+                        onPressed: () async {
+                          // 1. Get the interests of the person you clicked on
+                          final theirInterests = List<String>.from(
+                            person['interests'] ?? [],
+                          );
+                          // 2. Get your own interests from your controller
+                          final myInterests = _interestsController.text
+                              .split(',')
+                              .map((e) => e.trim())
+                              .toList();
+
+                          // 3. Call the AI
+                          final icebreaker = await _geminiService.getIcebreaker(
+                            myInterests,
+                            theirInterests,
+                          );
+
+
+                          // Check if the widget is still in the tre
+                          if (!mounted) return;
+
+                          // 4. Show it in a dialog
+                          showDialog(
+                            // ignore: use_build_context_synchronously
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: Text(
+                                "Icebreaker for ${person['username']}",
+                              ),
+                              content: Text(icebreaker),
+                            ),
+                          );
                         },
                       ),
                     );
