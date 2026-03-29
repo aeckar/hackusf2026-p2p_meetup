@@ -50,6 +50,7 @@ class HackUSFAppShell extends StatefulWidget {
 
 class _HackUSFAppShellState extends State<HackUSFAppShell> {
   late AppSession _session;
+  final GlobalKey<ScaffoldMessengerState> _messengerKey = GlobalKey<ScaffoldMessengerState>();
 
   @override
   void initState() {
@@ -70,14 +71,24 @@ class _HackUSFAppShellState extends State<HackUSFAppShell> {
     setState(() {
       _session = AppSession(localUserId: newId);
     });
-    old.dispose();
+    // Let Provider / MaterialApp rebuild with the new session before disposing the old notifier.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      old.dispose();
+      _messengerKey.currentState?.showSnackBar(
+        const SnackBar(content: Text('Logged out. You are now on a new local profile.')),
+      );
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final idKey = ValueKey<String>(_session.localUserId);
     return ChangeNotifierProvider<AppSession>.value(
+      key: idKey,
       value: _session,
       child: MaterialApp(
+        key: idKey,
+        scaffoldMessengerKey: _messengerKey,
         title: 'USF Meet',
         theme: ThemeData(
           brightness: Brightness.dark,
@@ -86,7 +97,6 @@ class _HackUSFAppShellState extends State<HackUSFAppShell> {
           useMaterial3: true,
         ),
         home: DashboardScreen(
-          key: ValueKey(_session.localUserId),
           profileRepository: widget.profileRepository,
           gemini: widget.gemini,
           onLogout: _logout,
