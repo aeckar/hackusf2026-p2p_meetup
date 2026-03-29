@@ -62,7 +62,6 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     _gearCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 520));
     WidgetsBinding.instance.addPostFrameCallback((_) {
       unawaited(_bootstrapProfile());
-      _subscribeToPings();
     });
   }
 
@@ -122,6 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     try {
       await widget.profileRepository.setOnlinePresence(userId: uid, online: true);
     } catch (_) {}
+    _subscribeToPings();
   }
 
   Future<void> _ensureLocationForApp() async {
@@ -732,22 +732,17 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
     return profileLocationLabel(row);
   }
 
-  String _statusForRow(Map<String, dynamic> row, AppSession session) {
-    final myId = session.localUserId;
-    final id = row['id']?.toString();
-    final meet = decodeMeetCampus(row['campus_location'] as String?);
-    if (meet != null) return meet.topic;
-    if (id == myId && session.hostingMeet != null) return session.hostingMeet!.topic;
-    return 'Looking for connections';
-  }
-
   Widget _feedList(List<Map<String, dynamic>> users) {
     final session = context.watch<AppSession>();
     final myId = session.localUserId;
-    final filtered = users.where((r) => profileIsOnline(r) && (r['id']?.toString() != myId)).toList();
+    final filtered = users.where((r) {
+      if (r['id']?.toString() == myId) return false;
+      if (!profileIsOnline(r)) return false;
+      return decodeMeetCampus(r['campus_location'] as String?) != null;
+    }).toList();
 
     if (filtered.isEmpty) {
-      return const Center(child: Text('No one else is online yet.'));
+      return const Center(child: Text('No active meetups right now.'));
     }
 
     return ListView.separated(
@@ -755,26 +750,14 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
       separatorBuilder: (_, __) => const Divider(height: 1),
       itemBuilder: (context, i) {
         final row = filtered[i];
+        final meet = decodeMeetCampus(row['campus_location'] as String?);
+        final name = profileUsername(row) ?? 'Unknown';
+        final location = meet?.location ?? profileLocationLabel(row);
+        final topic = meet?.topic ?? 'Looking for connections';
         return Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: () {
-              final hosting = decodeMeetCampus(row['campus_location'] as String?) != null;
-              if (hosting) {
-                _maybeJoinHost(row);
-              } else {
-                showDialog<void>(
-                  context: context,
-                  builder: (ctx) => AlertDialog(
-                    title: Text(profileUsername(row) ?? 'Meet'),
-                    content: Text(_statusForRow(row, session)),
-                    actions: [
-                      TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
-                    ],
-                  ),
-                );
-              }
-            },
+            onTap: () => meet != null ? _maybeJoinHost(row) : null,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               child: Row(
@@ -786,9 +769,11 @@ class _DashboardScreenState extends State<DashboardScreen> with TickerProviderSt
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(_locationForRow(row, session), style: const TextStyle(fontWeight: FontWeight.w700)),
-                        const SizedBox(height: 4),
-                        Text(_statusForRow(row, session)),
+                        Text(name, style: const TextStyle(fontWeight: FontWeight.w700)),
+                        const SizedBox(height: 2),
+                        Text(location, style: const TextStyle(color: Colors.white70, fontSize: 12)),
+                        const SizedBox(height: 2),
+                        Text(topic),
                       ],
                     ),
                   ),
@@ -1168,7 +1153,6 @@ class _SettingsPanelState extends State<_SettingsPanel> {
           ),
           SwitchListTile(
             title: const Text('Show real name publicly'),
-            subtitle: const Text('Mirrors is_real_name_public in profiles.'),
             value: session.showRealName,
             onChanged: session.setShowRealName,
           ),
